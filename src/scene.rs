@@ -67,38 +67,38 @@ impl crate::framework::Framework for Scene {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut entities = Vec::new();
+        let entities = Vec::new();
         {
-            let source = include_bytes!("assets/models/model.obj");
-            let data = obj::ObjData::load_buf(&source[..]).unwrap();
-            let mut vertices = Vec::new();
-            for object in data.objects {
-                for group in object.groups {
-                    vertices.clear();
-                    for poly in group.polys {
-                        for end_idx in 2..poly.0.len() {
-                            for &idx in &[0, end_idx - 1, end_idx] {
-                                let obj::IndexTuple(position_id, _texture_id, normal_id) =
-                                    poly.0[idx];
-                                vertices.push(Vertex {
-                                    pos: data.position[position_id],
-                                    normal: data.normal[normal_id.unwrap()],
-                                })
-                            }
-                        }
-                        let vertex_buf =
-                            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                label: Some("Vertex"),
-                                contents: bytemuck::cast_slice(&vertices),
-                                usage: wgpu::BufferUsages::VERTEX,
-                            });
-                        entities.push(Entity {
-                            vertex_count: vertices.len() as u32,
-                            vertex_buf,
-                        });
-                    }
-                }
-            }
+            // let source = include_bytes!("assets/models/model.obj");
+            // let data = obj::ObjData::load_buf(&source[..]).unwrap();
+            // let mut vertices = Vec::new();
+            // for object in data.objects {
+            //     for group in object.groups {
+            //         vertices.clear();
+            //         for poly in group.polys {
+            //             for end_idx in 2..poly.0.len() {
+            //                 for &idx in &[0, end_idx - 1, end_idx] {
+            //                     let obj::IndexTuple(position_id, _texture_id, normal_id) =
+            //                         poly.0[idx];
+            //                     vertices.push(Vertex {
+            //                         pos: data.position[position_id],
+            //                         normal: data.normal[normal_id.unwrap()],
+            //                     })
+            //                 }
+            //             }
+            //             let vertex_buf =
+            //                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            //                     label: Some("Vertex"),
+            //                     contents: bytemuck::cast_slice(&vertices),
+            //                     usage: wgpu::BufferUsages::VERTEX,
+            //                 });
+            //             entities.push(Entity {
+            //                 vertex_count: vertices.len() as u32,
+            //                 vertex_buf,
+            //             });
+            //         }
+            //     }
+            // }
 
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -265,7 +265,6 @@ impl crate::framework::Framework for Scene {
                 ..size
             };
             let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
-            log::info!("Max mips: {}", max_mips);
 
             log::info!(
                 "Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
@@ -298,7 +297,6 @@ impl crate::framework::Framework for Scene {
             for level in reader.levels() {
                 image.extend_from_slice(level);
             }
-            log::info!("Mip level count: {}", header.level_count);
 
             let texture = device.create_texture_with_data(
                 queue,
