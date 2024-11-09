@@ -19,23 +19,19 @@ var<uniform> r_data: Data;
 
 @vertex
 fn vs_universe(@builtin(vertex_index) vertex_index: u32) -> UniverseOutput {
-    // hacky way to draw a large triangle
-    let tmp1 = i32(vertex_index) / 2;
-    let tmp2 = i32(vertex_index) & 1;
-    let pos = vec4<f32>(
-        f32(tmp1) * 4.0 - 1.0,
-        f32(tmp2) * 4.0 - 1.0,
-        1.0,
-        1.0
-    );
-
-    // transposition = inversion for this orthonormal matrix
-    let inv_model_view = transpose(mat3x3<f32>(r_data.view[0].xyz, r_data.view[1].xyz, r_data.view[2].xyz));
-    let unprojected = r_data.proj_inv * pos;
+    // Generate a full-screen triangle
+    let pos = vec2<f32>(
+      f32((vertex_index << 1) & 2),
+      f32(vertex_index & 2)
+    ) * 2.0 - 1.0;
 
     var result: UniverseOutput;
-    result.uv = inv_model_view * unprojected.xyz;
-    result.position = pos;
+    result.position = vec4<f32>(pos, 0.9999, 1.0);
+
+    var skybox_view = r_data.view;
+    skybox_view[3] = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+
+    result.uv = (skybox_view * vec4<f32>(pos, 1.0, 0.0)).xyz;
     return result;
 }
 
@@ -51,9 +47,10 @@ fn vs_entity(
     @location(1) normal: vec3<f32>,
 ) -> EntityOutput {
     var result: EntityOutput;
-    result.normal = normal;
-    result.view = pos - r_data.cam_pos.xyz;
-    result.position = r_data.proj * r_data.view * vec4<f32>(pos, 1.0);
+    result.normal = normalize(normal);
+    let world_pos = vec4<f32>(pos, 1.0);
+    result.view = world_pos.xyz - r_data.cam_pos.xyz;
+    result.position = r_data.proj * r_data.view * world_pos;
     return result;
 }
 
@@ -71,10 +68,28 @@ fn fs_universe(vertex: UniverseOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_entity(vertex: EntityOutput) -> @location(0) vec4<f32> {
-    let incident = normalize(vertex.view);
+    let light_dir = normalize(vec3<f32>(1.0, 1.0, 1.0)); // Directional light
+    let view_dir = normalize(-vertex.view);
     let normal = normalize(vertex.normal);
-    let reflected = incident - 2.0 * dot(normal, incident) * normal;
+
+    // Ambient
+    let ambient_strength = 0.1;
+    let ambient = ambient_strength * vec3<f32>(1.0, 1.0, 1.0);
+
+    // Diffuse
+    let diff = max(dot(normal, light_dir), 0.0);
+    let diffuse = diff * vec3<f32>(1.0, 1.0, 1.0);
+
+    // Specular
+    let specular_strength = 0.5;
+    let reflect_dir = reflect(-light_dir, normal);
+    let spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
+    let specular = specular_strength * spec * vec3<f32>(1.0, 1.0, 1.0);
+
+    // Reflection
+    let reflected = reflect(normalize(vertex.view), normal);
 
     let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
-    return vec4<f32>(vec3<f32>(0.1) + 0.5 * reflected_color, 1.0);
+    let result = (ambient + diffuse + specular) * reflected_color;
+    return vec4<f32>(result, 1.0);
 }
