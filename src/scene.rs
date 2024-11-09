@@ -1,21 +1,8 @@
-use bytemuck::{Pod, Zeroable};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
-use crate::camera::Camera;
+use crate::{camera::Camera, generate_sphere, Entity, Vertex};
 
 const IMAGE_SIZE: u32 = 1024;
-
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-struct Vertex {
-    pos: [f32; 3],
-    normal: [f32; 3],
-}
-
-struct Entity {
-    vertex_count: u32,
-    vertex_buf: wgpu::Buffer,
-}
 
 pub struct Scene {
     camera: Camera,
@@ -66,39 +53,36 @@ impl crate::framework::Framework for Scene {
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> Self {
-        let entities = Vec::new();
+    ) -> Result<Self, anyhow::Error> {
+        let mut entities = Vec::new();
         {
-            // let source = include_bytes!("assets/models/model.obj");
-            // let data = obj::ObjData::load_buf(&source[..]).unwrap();
-            // let mut vertices = Vec::new();
-            // for object in data.objects {
-            //     for group in object.groups {
-            //         vertices.clear();
-            //         for poly in group.polys {
-            //             for end_idx in 2..poly.0.len() {
-            //                 for &idx in &[0, end_idx - 1, end_idx] {
-            //                     let obj::IndexTuple(position_id, _texture_id, normal_id) =
-            //                         poly.0[idx];
-            //                     vertices.push(Vertex {
-            //                         pos: data.position[position_id],
-            //                         normal: data.normal[normal_id.unwrap()],
-            //                     })
-            //                 }
-            //             }
-            //             let vertex_buf =
-            //                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            //                     label: Some("Vertex"),
-            //                     contents: bytemuck::cast_slice(&vertices),
-            //                     usage: wgpu::BufferUsages::VERTEX,
-            //                 });
-            //             entities.push(Entity {
-            //                 vertex_count: vertices.len() as u32,
-            //                 vertex_buf,
-            //             });
-            //         }
-            //     }
-            // }
+            let radius = 10.0;
+            let stacks = 40;
+            let slices = 40;
+            let sphere_pos = glam::Vec3::new(0.0, 0.0, -50.0);
+            let (vertices, indices) = generate_sphere(radius, stacks, slices, sphere_pos);
+
+            // Create vertex buffer from the sphere vertices
+            let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Sphere Vertex Buffer"),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+            // Create index buffer from the sphere indices
+            let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Sphere Index Buffer"),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+            let sphere_entity = Entity {
+                vertex_buf,
+                index_buf,
+                vertex_count: indices.len() as u32,
+            };
+
+            entities.push(sphere_entity);
 
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -140,7 +124,7 @@ impl crate::framework::Framework for Scene {
                 screen_size: (config.width, config.height),
                 angle_xz: 0.2,
                 angle_y: 0.2,
-                dist: 20.0,
+                dist: 100.0,
             };
             let raw_uniforms = camera.to_uniform_data();
             let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -290,7 +274,8 @@ impl crate::framework::Framework for Scene {
                 _ => unreachable!(),
             };
 
-            let reader = ktx2::Reader::new(bytes).unwrap();
+            let reader = ktx2::Reader::new(bytes)
+                .map_err(|e| anyhow::anyhow!("Failed to create KTX2 reader: {}", e))?;
             let header = reader.header();
 
             let mut image = Vec::with_capacity(reader.data().len());
@@ -342,7 +327,7 @@ impl crate::framework::Framework for Scene {
 
             let depth_view = Self::create_depth_texture(config, device);
 
-            Scene {
+            Ok(Scene {
                 camera,
                 universe_pipeline,
                 entity_pipeline,
@@ -351,7 +336,7 @@ impl crate::framework::Framework for Scene {
                 entities,
                 depth_view,
                 staging_belt: wgpu::util::StagingBelt::new(0x100),
-            }
+            })
         }
     }
 
@@ -429,7 +414,8 @@ impl crate::framework::Framework for Scene {
 
             for entity in self.entities.iter() {
                 rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
-                rpass.draw(0..entity.vertex_count, 0..1);
+                rpass.set_index_buffer(entity.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+                rpass.draw_indexed(0..entity.vertex_count, 0, 0..1);
             }
 
             rpass.set_pipeline(&self.universe_pipeline);
