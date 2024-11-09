@@ -13,7 +13,7 @@ impl Camera {
     pub fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
         // aspect ratio
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 50.0);
+        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 400.0);
         let cam_pos = glam::Vec3::new(
             self.angle_xz.cos() * self.angle_y.sin() * self.dist,
             self.angle_xz.sin() * self.dist + MODEL_CENTER_Y,
