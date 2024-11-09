@@ -38,7 +38,7 @@ pub trait Framework: 'static + Sized {
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> Self;
+    ) -> Result<Self, anyhow::Error>;
 
     fn resize(
         &mut self,
@@ -415,12 +415,18 @@ pub async fn start<F: Framework>(title: &str) {
 
                     // If we haven't created the example yet, do so now.
                     if example.is_none() {
-                        example = Some(F::init(
+                        match F::init(
                             surface.config(),
                             &context.adapter,
                             &context.device,
                             &context.queue,
-                        ));
+                        ) {
+                            Ok(ex) => example = Some(ex),
+                            Err(e) => {
+                                log::error!("Failred to initialize the framework: {:#}", e);
+                                target.exit();
+                            }
+                        }
                     }
                 }
                 Event::Suspended => {
