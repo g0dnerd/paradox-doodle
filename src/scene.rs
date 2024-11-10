@@ -1,8 +1,6 @@
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
-use crate::{camera::Camera, generate_sphere, Entity, Vertex};
-
-const IMAGE_SIZE: u32 = 1024;
+use crate::{camera::Camera, create_sphere_entity, generate_sphere, Cli, Entity, Vertex};
 
 pub struct Scene {
     camera: Camera,
@@ -49,6 +47,7 @@ impl crate::framework::Framework for Scene {
     }
 
     fn init(
+        args: &Cli,
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
@@ -56,31 +55,13 @@ impl crate::framework::Framework for Scene {
     ) -> Result<Self, anyhow::Error> {
         let mut entities = Vec::new();
         {
-            let radius = 10.0;
-            let stacks = 40;
-            let slices = 40;
-            let sphere_pos = glam::Vec3::new(0.0, 0.0, -50.0);
-            let (vertices, indices) = generate_sphere(radius, stacks, slices, sphere_pos);
+            let r = args.sphere_radius;
+            let stacks = args.sphere_stacks;
+            let slices = args.sphere_slices;
+            let sphere_pos = glam::Vec3::new(100.0, 0.0, 0.0);
 
-            // Create vertex buffer from the sphere vertices
-            let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Sphere Vertex Buffer"),
-                contents: bytemuck::cast_slice(&vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-            // Create index buffer from the sphere indices
-            let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Sphere Index Buffer"),
-                contents: bytemuck::cast_slice(&indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-
-            let sphere_entity = Entity {
-                vertex_buf,
-                index_buf,
-                vertex_count: indices.len() as u32,
-            };
+            let (vertices, indices) = generate_sphere(r, stacks, slices, sphere_pos);
+            let sphere_entity = create_sphere_entity(device, vertices, indices)?;
 
             entities.push(sphere_entity);
 
@@ -120,11 +101,13 @@ impl crate::framework::Framework for Scene {
             // Create the render pipeline
             let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
+            let camera_distance = args.camera_distance.unwrap_or(100.0);
+
             let camera = Camera {
                 screen_size: (config.width, config.height),
-                angle_xz: 0.2,
-                angle_y: 0.2,
-                dist: 100.0,
+                angle_xz: 0.1,
+                angle_y: -1.6,
+                dist: camera_distance,
             };
             let raw_uniforms = camera.to_uniform_data();
             let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -238,9 +221,11 @@ impl crate::framework::Framework for Scene {
                     wgpu::TextureFormat::Rgba8UnormSrgb
                 };
 
+            let image_size = args.image_size;
+
             let size = wgpu::Extent3d {
-                width: IMAGE_SIZE,
-                height: IMAGE_SIZE,
+                width: image_size,
+                height: image_size,
                 depth_or_array_layers: 6,
             };
 
@@ -253,26 +238,19 @@ impl crate::framework::Framework for Scene {
             log::info!(
                 "Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
                 skybox_format,
-                IMAGE_SIZE,
-                IMAGE_SIZE,
+                image_size,
+                image_size,
                 max_mips,
             );
 
-            let bytes = match skybox_format {
-                wgpu::TextureFormat::Astc {
-                    block: AstcBlock::B4x4,
-                    channel: AstcChannel::UnormSrgb,
-                } => &include_bytes!("assets/images/astc.ktx2")[..],
-                wgpu::TextureFormat::Etc2Rgb8A1UnormSrgb => {
-                    &include_bytes!("assets/images/etc2.ktx2")[..]
-                }
-                // wgpu::TextureFormat::Bc7RgbaUnormSrgb => &include_bytes!("images/bc7.ktx2")[..],
-                wgpu::TextureFormat::Rgba8UnormSrgb => {
-                    log::info!("Using rgba8 file");
-                    &include_bytes!("assets/images/rgba8.ktx2")[..]
-                }
-                _ => unreachable!(),
-            };
+            // Only supporting rgba8 files for now
+            if skybox_format != wgpu::TextureFormat::Rgba8UnormSrgb {
+                return Err(anyhow::anyhow!(
+                    "Unsupported texture type {:?} (only rgba8 is supported at the moment)",
+                    skybox_format
+                ));
+            }
+            let bytes = &include_bytes!("assets/images/rgba8.ktx2");
 
             let reader = ktx2::Reader::new(bytes)
                 .map_err(|e| anyhow::anyhow!("Failed to create KTX2 reader: {}", e))?;
@@ -354,10 +332,10 @@ impl crate::framework::Framework for Scene {
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             winit::event::WindowEvent::CursorMoved { position, .. } => {
-                let norm_x = position.x as f32 / self.camera.screen_size.0 as f32 - 0.5;
-                let norm_y = position.y as f32 / self.camera.screen_size.1 as f32 - 0.5;
-                self.camera.angle_y = norm_x * 5.0;
-                self.camera.angle_xz = norm_y;
+                let _norm_x = position.x as f32 / self.camera.screen_size.0 as f32 - 0.5;
+                let _norm_y = position.y as f32 / self.camera.screen_size.1 as f32 - 0.5;
+                // self.camera.angle_y = norm_x * 5.0;
+                // self.camera.angle_xz = norm_y;
             }
             _ => {}
         }
