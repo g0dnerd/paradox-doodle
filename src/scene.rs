@@ -250,7 +250,7 @@ impl crate::framework::Framework for Scene {
                     skybox_format
                 ));
             }
-            let bytes = &include_bytes!("assets/images/rgba8.ktx2");
+            let bytes = &include_bytes!("assets/images/skybox.ktx2");
 
             let reader = ktx2::Reader::new(bytes)
                 .map_err(|e| anyhow::anyhow!("Failed to create KTX2 reader: {}", e))?;
