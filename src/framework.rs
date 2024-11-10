@@ -9,6 +9,8 @@ use winit::{
     window::Window,
 };
 
+use crate::Cli;
+
 pub trait Framework: 'static + Sized {
     const SRGB: bool = true;
 
@@ -34,6 +36,7 @@ pub trait Framework: 'static + Sized {
     }
 
     fn init(
+        args: &Cli,
         config: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
@@ -378,7 +381,7 @@ impl Default for FrameCounter {
     }
 }
 
-pub async fn start<F: Framework>(title: &str) {
+pub async fn start<F: Framework>(title: &str, args: Cli) {
     init_logger();
 
     log::debug!(
@@ -392,7 +395,7 @@ pub async fn start<F: Framework>(title: &str) {
     let mut frame_counter = FrameCounter::new();
 
     // We wait to create the example until we have a valid surface.
-    let mut example = None;
+    let mut scene = None;
 
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
@@ -414,14 +417,15 @@ pub async fn start<F: Framework>(title: &str) {
                     surface.resume(&context, window_loop.window.clone(), F::SRGB);
 
                     // If we haven't created the example yet, do so now.
-                    if example.is_none() {
+                    if scene.is_none() {
                         match F::init(
+                            &args,
                             surface.config(),
                             &context.adapter,
                             &context.device,
                             &context.queue,
                         ) {
-                            Ok(ex) => example = Some(ex),
+                            Ok(ex) => scene = Some(ex),
                             Err(e) => {
                                 log::error!("Failred to initialize the framework: {:#}", e);
                                 target.exit();
@@ -435,7 +439,7 @@ pub async fn start<F: Framework>(title: &str) {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => {
                         surface.resize(&context, size);
-                        example.as_mut().unwrap().resize(
+                        scene.as_mut().unwrap().resize(
                             surface.config(),
                             &context.device,
                             &context.queue,
@@ -470,7 +474,7 @@ pub async fn start<F: Framework>(title: &str) {
                         // If this happens, just drop the requested redraw on the floor.
                         //
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
-                        if example.is_none() {
+                        if scene.is_none() {
                             return;
                         }
 
@@ -482,7 +486,7 @@ pub async fn start<F: Framework>(title: &str) {
                             ..wgpu::TextureViewDescriptor::default()
                         });
 
-                        example
+                        scene
                             .as_mut()
                             .unwrap()
                             .render(&view, &context.device, &context.queue);
@@ -491,7 +495,7 @@ pub async fn start<F: Framework>(title: &str) {
 
                         window_loop.window.request_redraw();
                     }
-                    _ => example.as_mut().unwrap().update(event),
+                    _ => scene.as_mut().unwrap().update(event),
                 },
                 _ => {}
             }
@@ -499,12 +503,12 @@ pub async fn start<F: Framework>(title: &str) {
     );
 }
 
-pub fn run<F: Framework>(title: &'static str) {
+pub fn run<F: Framework>(title: &'static str, args: Cli) {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-            wasm_bindgen_futures::spawn_local(async move { start::<F>(title).await })
+            wasm_bindgen_futures::spawn_local(async move { start::<F>(title, args).await })
         } else {
-            pollster::block_on(start::<F>(title));
+            pollster::block_on(start::<F>(title, args));
         }
     }
 }

@@ -14,11 +14,13 @@ impl Camera {
         // aspect ratio
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
         let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 400.0);
+
         let cam_pos = glam::Vec3::new(
             self.angle_xz.cos() * self.angle_y.sin() * self.dist,
             self.angle_xz.sin() * self.dist + MODEL_CENTER_Y,
             self.angle_xz.cos() * self.angle_y.cos() * self.dist,
         );
+
         let view = glam::Mat4::look_at_rh(
             cam_pos,
             glam::Vec3::new(0f32, MODEL_CENTER_Y, 0.0),
