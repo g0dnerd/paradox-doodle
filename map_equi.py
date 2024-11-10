@@ -15,9 +15,9 @@ filename, original_extension = os.path.splitext(infile)
 file_extension = ".jpg"
 
 name_map = [
-    ["", "", "top", ""],
+    ["", "top", "", ""],
     ["left", "front", "right", "back"],
-    ["", "", "bottom", ""],
+    ["", "bottom", "", ""],
 ]
 
 try:
@@ -34,17 +34,30 @@ try:
             if name_map[row][col] != "":
                 sx = cube_size * col
                 sy = cube_size * row
-                fn = name_map[row][col] + file_extension
-                filelist.append(fn)
-                print("%s --> %s" % (str((sx, sy, sx + cube_size, sy + cube_size)), fn))
-                im.crop((sx, sy, sx + cube_size, sy + cube_size)).save(fn)
+
+                print(f"Indexing face {name_map[row][col]} at {{ x {sx}, y {sy}}}")
+
+                filename = name_map[row][col] + file_extension
+                filelist.append(filename)
+                print(
+                    f"Cropping {filename}: {(sx, sy, sx + cube_size, sy + cube_size)}"
+                )
+                face = im.crop((sx, sy, sx + cube_size, sy + cube_size))
+
+                # Rotate top and bottom faces
+                if name_map[row][col] in ["top", "bottom"]:
+                    face = face.rotate(90 if name_map[row][col] == "top" else -90)
+
+                face.save(filename)
+                if name_map[row][col] == "bottom":
+                    print("Bottom face stats:", face.getextrema())
 
     zfname = filename + ".zip"
     print("Creating zipfile: " + zfname)
     zf = zipfile.ZipFile(zfname, mode="w")
     try:
-        for fn in filelist:
-            zf.write(fn)
+        for filename in filelist:
+            zf.write(filename)
         print("done")
     finally:
         zf.close()
