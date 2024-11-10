@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+
 use clap::Parser;
 use wgpu::util::DeviceExt;
 
@@ -27,10 +28,12 @@ pub fn generate_sphere(
     radius: Option<f32>,
     stacks: Option<u32>,
     slices: Option<u32>,
+
     sphere_position: glam::Vec3,
 ) -> (Vec<Vertex>, Vec<u32>) {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
+
 
     let r = if let Some(rad) = radius {
         rad

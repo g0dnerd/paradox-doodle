@@ -49,6 +49,7 @@ fn vs_entity(
     var result: EntityOutput;
     result.normal = normalize(normal);
     let world_pos = vec4<f32>(pos, 1.0);
+
     result.view = (r_data.view * world_pos).xyz;
     result.position = r_data.proj * r_data.view * world_pos;
     return result;
