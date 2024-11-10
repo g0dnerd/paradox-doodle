@@ -1,0 +1,15 @@
+/target
+
+Cargo.lock
+
+*.tif
+.venv
+
+/src/assets/images/skybox_src_images
+/src/assets/images/256
+/src/assets/images/512
+/src/assets/images/1024
+/src/assets/images/2048
+/src/assets/images/4096
+
+*.png
