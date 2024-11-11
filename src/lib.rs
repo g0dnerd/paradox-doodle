@@ -7,10 +7,6 @@ pub mod camera;
 pub mod framework;
 pub mod scene;
 
-const DEFAULT_RADIUS: f32 = 15.0;
-const DEFAULT_STACKS: u32 = 60;
-const DEFAULT_SLICES: u32 = 60;
-
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct Vertex {
@@ -24,16 +20,17 @@ pub struct Entity {
     pub index_buf: wgpu::Buffer,
 }
 
+const DEFAULT_RADIUS: f32 = 15.0;
+const DEFAULT_STACKS: u32 = 40;
+const DEFAULT_SLICES: u32 = 40;
 pub fn generate_sphere(
     radius: Option<f32>,
     stacks: Option<u32>,
     slices: Option<u32>,
-
-    sphere_position: glam::Vec3,
+    // sphere_position: glam::Vec3,
 ) -> (Vec<Vertex>, Vec<u32>) {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
-
 
     let r = if let Some(rad) = radius {
         rad
@@ -62,11 +59,7 @@ pub fn generate_sphere(
             let x = stack_radius * slice_angle.cos();
             let z = stack_radius * slice_angle.sin();
 
-            let pos = [
-                x + sphere_position.x,
-                stack_y + sphere_position.y,
-                z + sphere_position.z,
-            ];
+            let pos = [x, stack_y, z];
             let normal = [x / r, stack_y / r, z / r];
             vertices.push(Vertex { pos, normal });
 
