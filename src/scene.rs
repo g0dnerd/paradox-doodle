@@ -11,6 +11,7 @@ pub struct Scene {
     entities: Vec<Entity>,
     depth_view: wgpu::TextureView,
     staging_belt: wgpu::util::StagingBelt,
+    rotation_angle: f32,
 }
 
 impl Scene {
@@ -58,9 +59,8 @@ impl crate::framework::Framework for Scene {
             let r = args.sphere_radius;
             let stacks = args.sphere_stacks;
             let slices = args.sphere_slices;
-            let sphere_pos = glam::Vec3::new(100.0, 0.0, 0.0);
 
-            let (vertices, indices) = generate_sphere(r, stacks, slices, sphere_pos);
+            let (vertices, indices) = generate_sphere(r, stacks, slices);
             let sphere_entity = create_sphere_entity(device, vertices, indices)?;
 
             entities.push(sphere_entity);
@@ -101,15 +101,28 @@ impl crate::framework::Framework for Scene {
             // Create the render pipeline
             let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-            let camera_distance = args.camera_distance.unwrap_or(100.0);
+            let camera_distance = args.camera_distance.unwrap_or(150.0);
 
             let camera = Camera {
                 screen_size: (config.width, config.height),
-                angle_xz: 0.1,
-                angle_y: -1.6,
                 dist: camera_distance,
+                angle: -2.5,
             };
-            let raw_uniforms = camera.to_uniform_data();
+            let raw_camera_data = camera.to_uniform_data();
+
+            let rotation_matrix = glam::Mat4::from_rotation_y(0.0);
+            let translation_matrix = glam::Mat4::from_translation(glam::Vec3::new(0.0, 2.0, 0.0));
+            // let model_matrix = rotation_matrix * translation_matrix;
+            let model_matrix = translation_matrix * rotation_matrix;
+
+            let raw_model_matrix = model_matrix.to_cols_array();
+
+            // Camera data: 52, Entity data: 16
+            let mut raw_uniforms = Vec::with_capacity(52 + 16);
+
+            raw_uniforms.extend_from_slice(&raw_camera_data);
+            raw_uniforms.extend_from_slice(&raw_model_matrix);
+
             let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Buffer"),
                 contents: bytemuck::cast_slice(&raw_uniforms),
@@ -314,6 +327,7 @@ impl crate::framework::Framework for Scene {
                 entities,
                 depth_view,
                 staging_belt: wgpu::util::StagingBelt::new(0x100),
+                rotation_angle: 0.0,
             })
         }
     }
@@ -334,8 +348,8 @@ impl crate::framework::Framework for Scene {
             winit::event::WindowEvent::CursorMoved { position, .. } => {
                 let _norm_x = position.x as f32 / self.camera.screen_size.0 as f32 - 0.5;
                 let _norm_y = position.y as f32 / self.camera.screen_size.1 as f32 - 0.5;
-                // self.camera.angle_y = norm_x * 5.0;
-                // self.camera.angle_xz = norm_y;
+                // self.camera.angle = norm_x * 5.0;
+                // self.camera.angle_xz = (norm_y * 5.0).clamp(-1.5, 1.5);
             }
             _ => {}
         }
@@ -345,8 +359,25 @@ impl crate::framework::Framework for Scene {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        // update rotation
-        let raw_uniforms = self.camera.to_uniform_data();
+        // Update rotation angle for the sphere
+        self.rotation_angle += 0.0003;
+
+        // Translation matrix to move the sphere to the origin
+        let rotation_matrix = glam::Mat4::from_rotation_y(self.rotation_angle);
+
+        let translation_matrix = glam::Mat4::from_translation(glam::Vec3::new(0.0, 2.0, 0.0));
+        // let model_matrix = rotation_matrix * translation_matrix;
+        let model_matrix = translation_matrix * rotation_matrix;
+        let raw_model_matrix = model_matrix.to_cols_array();
+
+        let raw_camera_data = self.camera.to_uniform_data();
+
+        // Camera data: 52, Entity data: 16
+        let mut raw_uniforms = Vec::with_capacity(52 + 16);
+
+        raw_uniforms.extend_from_slice(&raw_camera_data);
+        raw_uniforms.extend_from_slice(&raw_model_matrix);
+
         self.staging_belt
             .write_buffer(
                 &mut encoder,
