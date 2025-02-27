@@ -1,7 +1,16 @@
 #version 330 core
 
-out vec4 FragColor;
+in vec3 norm;
+out vec4 fragColor;
+
+uniform vec3 color;
+
+uniform vec3 sunDir = vec3(-0.67, -0.67, 0.3);
+uniform float sunStrength = 0.9;
+uniform float ambientStrength = 0.1;
 
 void main() {
-  FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+  float faceSunAmount = max(-dot(norm, sunDir) * sunStrength, 0.0);
+
+  fragColor = vec4(color * (ambientStrength + faceSunAmount), 1.0);
 }

@@ -53,13 +53,13 @@ pub fn makeProgram() !gl.GLuint {
 
 pub fn makeVao() !gl.GLuint {
     const vertices: []const f32 = &.{
-        0.5, 0.5, -0.5,
-        0.5, -0.5, -0.5,
-        0.5, 0.5, 0.5,
-        0.5, -0.5, 0.5,
-        -0.5, 0.5, -0.5,
+        0.5,  0.5,  -0.5,
+        0.5,  -0.5, -0.5,
+        0.5,  0.5,  0.5,
+        0.5,  -0.5, 0.5,
+        -0.5, 0.5,  -0.5,
         -0.5, -0.5, -0.5,
-        -0.5, 0.5, 0.5,
+        -0.5, 0.5,  0.5,
         -0.5, -0.5, 0.5,
     };
 
@@ -68,7 +68,7 @@ pub fn makeVao() !gl.GLuint {
         2, 7, 3,
         6, 5, 7,
         1, 7, 5,
-        0, 4, 1,
+        0, 3, 1,
         4, 1, 5,
         4, 6, 2,
         2, 6, 7,
@@ -94,12 +94,12 @@ pub fn makeVao() !gl.GLuint {
     };
 
     const normals: []const f32 = &.{
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0,
-        -1.0, 0.0, 0.0,
-        0.0, -1.0, 0.0,
-        1.0, 0.0, 0.0,
-        0.0, 0.0, -1.0,
+        0.0,  1.0,  0.0,
+        0.0,  0.0,  1.0,
+        -1.0, 0.0,  0.0,
+        0.0,  -1.0, 0.0,
+        1.0,  0.0,  0.0,
+        0.0,  0.0,  -1.0,
     };
 
     var combined_buffer: [36 * 3 * 2]f32 = undefined;
@@ -107,8 +107,8 @@ pub fn makeVao() !gl.GLuint {
 
     for (position_indices, normal_indices) |vidx, nidx| {
         defer combined_buffer_idx += 6;
-        const vert = vertices[vidx * 3..(vidx+1)*3];
-        const norm = normals[nidx * 3..(nidx+1)*3];
+        const vert = vertices[vidx * 3 .. (vidx + 1) * 3];
+        const norm = normals[nidx * 3 .. (nidx + 1) * 3];
 
         combined_buffer[combined_buffer_idx + 0] = vert[0];
         combined_buffer[combined_buffer_idx + 1] = vert[1];
@@ -131,6 +131,9 @@ pub fn makeVao() !gl.GLuint {
 
     gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 6 * @sizeOf(f32), null);
     gl.glEnableVertexAttribArray(0);
+
+    gl.glVertexAttribPointer(1, 3, gl.GL_FLOAT, gl.GL_FALSE, 6 * @sizeOf(f32), @ptrFromInt(12));
+    gl.glEnableVertexAttribArray(1);
 
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
 
@@ -183,6 +186,21 @@ fn makeYRotation(amount: f32) [16]f32 {
     return matrix;
 }
 
+fn hueToRgb(hue: f32) [3]f32 {
+    const segment = (@as(u32, @intFromFloat(hue)) % 360) / 60;
+    const x = (1 - @abs(std.math.modf(hue / 60 / 2).fpart * 2 - 1));
+
+    return switch (segment) {
+        0 => .{ 1, x, 0 },
+        1 => .{ x, 1, 0 },
+        2 => .{ 0, 1, x },
+        3 => .{ 0, x, 1 },
+        4 => .{ x, 0, 1 },
+        5 => .{ 1, 0, x },
+        else => unreachable,
+    };
+}
+
 pub fn main() !void {
     _ = glfw.glfwSetErrorCallback(errorCallback);
 
@@ -207,7 +225,8 @@ pub fn main() !void {
     gl.glEnable(gl.GL_DEPTH_TEST);
     gl.glDepthFunc(gl.GL_LESS);
 
-    const camera_uniform = gl.glGetUniformLocation(program, "camera");
+    const color_uniform = gl.glGetUniformLocation(program, "color");
+    const world_transform_uniform = gl.glGetUniformLocation(program, "world_transform");
     const translation: [16]f32 = .{
         1.0, 0.0, 0.0, 0.1,
         0.0, 1.0, 0.0, 0.0,
@@ -217,6 +236,7 @@ pub fn main() !void {
 
     var last = try std.time.Instant.now();
     var y_rot: f32 = 0.5;
+    var hue: f32 = 0;
 
     while (glfw.glfwWindowShouldClose(window) == 0) {
         const now = try std.time.Instant.now();
@@ -233,14 +253,21 @@ pub fn main() !void {
             y_rot -= 2 * std.math.pi;
         }
 
+        hue += elapsed * 30;
+        hue = @mod(hue, 360);
+
         const x = matMul(
             makeYRotation(y_rot),
             makeZRotation(0.5),
         );
-        const camera_matrix = matMul(translation, x);
+        const obj_matrix = matMul(translation, x);
 
         gl.glUseProgram(program);
-        gl.glUniformMatrix4fv(camera_uniform, 1, gl.GL_TRUE, &camera_matrix);
+        gl.glUniformMatrix4fv(world_transform_uniform, 1, gl.GL_TRUE, &obj_matrix);
+
+        const rgb = hueToRgb(hue);
+        gl.glUniform3f(color_uniform, rgb[0], rgb[1], rgb[2]);
+
         gl.glBindVertexArray(vao);
         gl.glDrawArrays(gl.GL_TRIANGLES, 0, 36);
 
